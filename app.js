@@ -3,96 +3,109 @@ const {open} = require('sqlite')
 const sqlite3 = require('sqlite3')
 const path = require('path')
 
-let app = express()
+const app = express()
+let db = null
+const dbpath = path.join(__dirname, 'covid19India.db')
 app.use(express.json())
 
-let db = null
-
-const dbPath = path.join(__dirname, 'moviesData.db')
-
-const initdbAndserver = async () => {
+const initdbandserver = async () => {
   try {
-    db = await open({filename: dbPath, driver: sqlite3.Database})
+    db = await open({filename: dbpath, driver: sqlite3.Database});
     app.listen(3000, () => {
-      console.log('server running')
-    })
+      console.log('server running....');
+    });
   } catch (e) {
-    console.log(`error is ${e.message}`)
+    console.log(`error is ${e.message}`);
+    process.exit(1);
   }
-}
+};
 
-initdbAndserver()
+initdbandserver();
 
-const getmovienames = a => {
-  return {movieName: `${a.movie_name}`}
-}
-
-app.get('/movies/', async (request, response) => {
-  const getQuery = `SELECT * FROM movie`
-  const result = await db.all(getQuery)
-  response.send(result.map(a => getmovienames(a)))
-})
-
-app.post('/movies/', async (request, response) => {
-  const {directorId, movieName, leadActor} = request.body
-  const postQuery = `INSERT INTO movie (director_id,movie_name,lead_actor) 
-    VALUES (${directorId},'${movieName}','${leadActor}')`
-  const postResult = await db.run(postQuery)
-  response.send('Movie Successfully Added')
-})
-
-const getmoviedetails = a => {
+const getstatedetails = a => {
   return {
-    movieId: a.movie_id,
-    directorId: a.director_id,
-    movieName: a.movie_name,
-    leadActor: a.lead_actor,
+    stateId: a.state_id,
+    stateName: a.state_name,
+    population: a.population,
   }
 }
 
-/*API-3*/
-app.get('/movies/:movieId/', async (request, response) => {
-  const {movieId} = request.params
-  const getQuery = `SELECT * FROM movie WHERE movie_id=${movieId}`
-  const getResult = await db.get(getQuery)
-  response.send(getResult.map(a => getmoviedetails(a)))
+app.get('/states/', async (request, response) => {
+  const getQuery1 = `SELECT * FROM state`
+  const getQuery1result = await db.all(getQuery1)
+  response.send(getQuery1result.map(a => getstatedetails(a)))
 })
 
-app.put('/movies/:movieId/', async (request, response) => {
-  const {movieId} = request.params
-  const {directorId, movieName, leadActor} = request.body
-
-  const putQuery = `UPDATE movie SET director_id=${directorId},movie_name='${movieName}',lead_actor='${leadActor}' WHERE movie_id=${movieId};`
-  const putResult = await db.run(putQuery)
-  response.send('Movie Details Updated')
+app.get('/states/:stateId/', async (request, response) => {
+  const {stateId} = request.params
+  const getQuery2 = `SELECT * FROM state WHERE state_id=${stateId}`
+  const getQuery2result = await db.get(getQuery2)
+  response.send(getstatedetails(getQuery2result))
 })
 
-app.delete('/movies/:movieId/', async (request, response) => {
-  const {movieId} = request.params
-  const deleteQuery = `DELETE FROM movie WHERE movie_id=${movieId}`
-  const deleteResult = await db.run(deleteQuery)
-  response.send('Movie Removed')
+app.post('/districts/', async (request, response) => {
+  const {districtName, stateId, cases, cured, active, deaths} = request.body
+  const postQuery1 = `INSERT INTO district (district_name,state_id,cases,cured,active,deaths) VALUES ('${districtName}',
+  ${stateId},${cases},${cured},${active},${deaths})`
+  const postQuery1result = await db.run(postQuery1)
+  response.send('District Successfully Added')
 })
 
-const getDirec = a => {
-  return {directorId: a.director_id, directorName: a.director_name}
+
+const getdistrictfun=a>{
+  return{
+    districtId: a.district_id,
+    districtName: a.district_name,
+    stateId: a.state_id,
+    cases: a.cases,
+    cured: a.cured,
+    active: a.active,
+    deaths: a.deaths
+    }
+
 }
-
-app.get('/directors/', async (request, response) => {
-  const getDirectors = `SELECT * FROM director`
-  const getDirectorsResult = await db.all(getDirectors)
-  response.send(getDirectorsResult.map(a => getDirec(a)))
+app.get("/districts/:districtId/",async (request,response)=>{
+  const {districtId}=request.params;
+  const getdistrictQuery=`SELECT * FROM district WHERE district_id=${districtId}`;
+  const getdistrictQueryresult=await db.all(getdistrictQuery);
+  response.send(getdistrictfun(getdistrictQueryresult))
 })
 
-const getdirectormovies = a => {
-  return {movieName: a.movie_name}
-}
-
-app.get('/directors/:directorId/movies/', async (request, response) => {
-  const {directorId} = request.params
-  const getDirectorMoviesQuery = `SELECT * FROM movie WHERE director_id=${directorId}`
-  const result = await db.all(getDirectorMoviesQuery)
-  response.send(result.map(a => getdirectormovies(a)))
+app.delete("/districts/:districtId/",async (request,response)=>{
+  const {districtId}=request.params;
+  const deleteQuery=`DELETE FROM district WHERE district_id=${districtId}`;
+  const deleteQueryresult=await db.run(deleteQuery);
+  respond.send("District Removed")
 })
 
-module.exports = app
+app.put("/districts/:districtId/", async (request,response)=>{
+  const {districtId}=request.params;
+  const {districtName,stateId,cases,cured,active,deaths}=request.body;
+  const putQuery=`UPDATE district SET district_name='${districtName}',state_id=${stateId},cases=${cases},cured=${cured},active=${active},deaths=${deaths}`
+  const putresult=await db.run(putQuery);
+  response.send("District Details Updated");
+})
+
+app.get("/states/:stateId/stats/",async (request,response)=>{
+  const {stateId}=request.params;
+  const api7Query=`SELECT SUM(cases) as totalCases,
+  SUM(cured) as totalCured,
+  SUM(active) as totalActive,
+  SUM(deaths) as totalDeaths FROM district WHERE state_id=${stateId}`;
+  const api7result=await db.get(api7Query);
+  respond.send(api7result);
+})
+
+app.get("/districts/:districtId/details/",async (request, response) => {
+    const { districtId } = request.params;
+    const getDistrictIdQuery = `
+    SELECT state_id FROM district
+    WHERE district_id = ${districtId}`;
+    const getDistrictIdQueryResponse =await db.get(getDistrictIdQuery);
+    const getStateNameQuery = `
+    SELECT state_name as stateName FROM state
+    WHERE state_id = ${getDistrictIdQueryResponse.state_id}`;
+    response.send(getStateNameQuery);
+    })
+
+module.exports=app
